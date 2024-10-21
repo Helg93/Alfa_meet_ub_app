@@ -1,7 +1,6 @@
 import telebot
 import sqlite3
 import random
-import time
 from telebot import types
 
 # Токен бота
@@ -22,8 +21,7 @@ cursor.execute('''
         department TEXT,
         position TEXT,
         city TEXT,
-        username TEXT,
-        last_interaction INTEGER DEFAULT 0  -- Время последнего получения контакта в виде UNIX-времени
+        username TEXT
     )
 ''')
 conn.commit()
@@ -33,42 +31,44 @@ user_interactions = {}
 # Функция для регистрации пользователя
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.send_message(message.chat.id, """Привет! 👋​
-        Я бот CX Team meet up 🤖
-        Каждую неделю ты можешь получать один контакт интересного собеседника из школы CX экспертов.
+    bot.send_message(
+        message.chat.id, 
+        """Привет! 👋​
+Я бот CX Team meet up 🤖
+Каждую неделю ты можешь получать один контакт интересного собеседника из школы CX экспертов.
 
-        Даже если встречи случайные, у нас схожие цели, амбиции и интересы.
+Даже если встречи случайные, у нас схожие цели, амбиции и интересы.
 
-        CX Team meet up — это возможность:
-        ▪️ познакомиться с другими учениками школы
-        ▪️ найти полезные контакты
-        ▪️ обменяться опытом с коллегами
+CX Team meet up — это возможность:
+▪️ познакомиться с другими учениками школы
+▪️ найти полезные контакты
+▪️ обменяться опытом с коллегами
 
-        Продолжая, ты соглашаешься на обработку персональных данных.
-        """)
-
-    bot.send_message(message.chat.id, "Пожалуйста, введите ваше имя и фамилию:")
+Продолжая, ты соглашаешься на обработку персональных данных.
+"""
+    )
+    bot.send_message(message.chat.id, "Пожалуйста, введите ваше имя и фамилию.")
     bot.register_next_step_handler(message, get_name)
-
+    
 # Получаем имя и фамилию
 def get_name(message):
     name = message.text
     chat_id = message.chat.id
-    bot.send_message(chat_id, "Укажите вашу дирекцию:")
+    bot.send_message(chat_id, "Укажите вашу дирекцию.")
     bot.register_next_step_handler(message, get_department, name)
 
 # Получаем дирекцию
 def get_department(message, name):
     department = message.text
     chat_id = message.chat.id
-    bot.send_message(chat_id, "Укажите вашу должность:")
+    bot.send_message(chat_id, "Укажите вашу должность.")
     bot.register_next_step_handler(message, get_position, name, department)
 
 # Получаем должность
 def get_position(message, name, department):
     position = message.text
     chat_id = message.chat.id
-    bot.send_message(chat_id, "Укажите город, в котором вы работаете:")
+    bot.send_message(chat_id, "Укажите город, в котором вы работаете.")
     bot.register_next_step_handler(message, get_city, name, department, position)
 
 # Получаем город и сохраняем данные пользователя
@@ -91,8 +91,6 @@ def get_city(message, name, department, position):
     # Добавляем кнопку для получения контакта коллеги
     send_get_colleague_button(chat_id)
 
-
-
 # Функция для отправки кнопки "Получить контакт коллеги"
 def send_get_colleague_button(chat_id):
     markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
@@ -104,22 +102,7 @@ def send_get_colleague_button(chat_id):
 @bot.message_handler(func=lambda message: message.text == "Получить контакт коллеги")
 def handle_get_colleague(message):
     chat_id = message.chat.id
-    
-    # Проверяем дату последнего взаимодействия
-    cursor.execute('SELECT last_interaction FROM users WHERE chat_id = ?', (chat_id,))
-    last_interaction = cursor.fetchone()[0]
-    current_time = int(time.time())
-
-    # Ограничение в 7 дней (604800 секунд)
-    one_week_seconds = 7 * 24 * 60 * 60
-
-    if current_time - last_interaction >= one_week_seconds:
-        send_random_colleague(chat_id)
-    else:
-        # Рассчитываем, сколько времени осталось до следующего запроса
-        remaining_time = one_week_seconds - (current_time - last_interaction)
-        days_left = remaining_time // (24 * 60 * 60)
-        bot.send_message(chat_id, f"Вы уже получили контакт коллеги на этой неделе. Попробуйте снова через {days_left} дн.")
+    send_random_colleague(chat_id)
 
 def send_random_colleague(chat_id):
     # Получаем всех пользователей, кроме текущего
@@ -139,11 +122,6 @@ def send_random_colleague(chat_id):
 
         # Добавляем коллегу в список знакомых
         user_interactions[chat_id].add(colleague[1])
-
-        # Обновляем время последнего взаимодействия
-        current_time = int(time.time())
-        cursor.execute('UPDATE users SET last_interaction = ? WHERE chat_id = ?', (current_time, chat_id))
-        conn.commit()
 
         # Формируем информацию о коллеге
         colleague_info = (
